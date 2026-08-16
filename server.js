@@ -846,6 +846,8 @@ app.get('/api/subscribers/stats', async (req, res) => {
   }
 });
 
+
+
 // Toggle featured status
 app.patch('/api/projects/:id/featured', async (req, res) => {
   try {
@@ -865,6 +867,189 @@ app.patch('/api/projects/:id/featured', async (req, res) => {
   }
 });
 
+
+// Import Review model
+const Review = require('./models/Review');
+
+// ============ REVIEW ROUTES ============
+
+// Get approved reviews (Public)
+app.get('/api/reviews', async (req, res) => {
+  try {
+    const { service, rating, page = 1, limit = 10 } = req.query;
+    
+    let query = { isApproved: true };
+    
+    if (service && service !== 'all') {
+      query.service = service;
+    }
+    
+    if (rating) {
+      query.rating = parseInt(rating);
+    }
+    
+    const reviews = await Review.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+    
+    const total = await Review.countDocuments(query);
+    const averageRating = await Review.aggregate([
+      { $match: { isApproved: true } },
+      { $group: { _id: null, avg: { $avg: '$rating' } } }
+    ]);
+    
+    res.json({
+      reviews,
+      total,
+      averageRating: averageRating[0]?.avg || 0,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
+    });
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    res.json({ reviews: [], total: 0, averageRating: 0 });
+  }
+});
+
+// Get all reviews (Admin)
+app.get('/api/reviews/all', async (req, res) => {
+  try {
+    const reviews = await Review.find().sort({ createdAt: -1 });
+    res.json({ reviews, total: reviews.length });
+  } catch (error) {
+    res.json({ reviews: [], total: 0 });
+  }
+});
+
+// Get review stats
+app.get('/api/reviews/stats', async (req, res) => {
+  try {
+    const total = await Review.countDocuments({ isApproved: true });
+    const average = await Review.aggregate([
+      { $match: { isApproved: true } },
+      { $group: { _id: null, avg: { $avg: '$rating' } } }
+    ]);
+    
+    const ratingDistribution = await Review.aggregate([
+      { $match: { isApproved: true } },
+      { $group: { _id: '$rating', count: { $sum: 1 } } },
+      { $sort: { _id: -1 } }
+    ]);
+    
+    res.json({
+      total,
+      averageRating: average[0]?.avg || 0,
+      ratingDistribution,
+    });
+  } catch (error) {
+    res.json({ total: 0, averageRating: 0, ratingDistribution: [] });
+  }
+});
+
+// Create review (Public)
+app.post('/api/reviews', async (req, res) => {
+  try {
+    const { name, email, rating, service, projectTitle, review, company, location } = req.body;
+    
+    if (!name || !email || !rating || !service || !projectTitle || !review) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    
+    const newReview = await Review.create({
+      name,
+      email,
+      rating,
+      service,
+      projectTitle,
+      review,
+      company: company || '',
+      location: location || '',
+    });
+    
+    console.log('✅ New review:', newReview.name);
+    res.status(201).json({
+      success: true,
+      message: 'Review submitted successfully. It will appear after approval.',
+      review: newReview,
+    });
+  } catch (error) {
+    console.error('Error creating review:', error);
+    res.status(500).json({ message: 'Error submitting review' });
+  }
+});
+
+// Approve review (Admin)
+app.patch('/api/reviews/:id/approve', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    
+    review.isApproved = true;
+    await review.save();
+    res.json(review);
+  } catch (error) {
+    res.status(500).json({ message: 'Error approving review' });
+  }
+});
+
+// Feature review (Admin)
+app.patch('/api/reviews/:id/feature', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    
+    review.isFeatured = !review.isFeatured;
+    await review.save();
+    res.json(review);
+  } catch (error) {
+    res.status(500).json({ message: 'Error featuring review' });
+  }
+});
+
+// Respond to review (Admin)
+app.post('/api/reviews/:id/respond', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    
+    review.response = {
+      text: req.body.text,
+      respondedAt: new Date(),
+    };
+    await review.save();
+    res.json(review);
+  } catch (error) {
+    res.status(500).json({ message: 'Error responding to review' });
+  }
+});
+
+// Mark helpful (Public)
+app.patch('/api/reviews/:id/helpful', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    
+    review.helpfulCount += 1;
+    await review.save();
+    res.json({ helpfulCount: review.helpfulCount });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating review' });
+  }
+});
+
+// Delete review (Admin)
+app.delete('/api/reviews/:id', async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: 'Review not found' });
+    
+    await review.deleteOne();
+    res.json({ message: 'Review deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting review' });
+  }
+});
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
