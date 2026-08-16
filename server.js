@@ -26,7 +26,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Connect to MongoDB
-connectDB();
+connectDB(); 
 
 // Root route
 app.get('/', (req, res) => {
