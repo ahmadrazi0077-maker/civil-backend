@@ -22,8 +22,8 @@ app.use(cors({
 }));
 
 // Body parser
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Connect to MongoDB
 connectDB(); 
@@ -1050,6 +1050,53 @@ app.delete('/api/reviews/:id', async (req, res) => {
     res.status(500).json({ message: 'Error deleting review' });
   }
 });
+// Public file upload for quote drawings (used by the public /quote form - no login required)
+// Accepts: { image: "data:...;base64,...", filename: "drawing.pdf" }
+// Returns: { url: "https://res.cloudinary.com/..." }
+app.post('/api/upload/quote', async (req, res) => {
+  try {
+    const { image, filename } = req.body;
+
+    if (!image || typeof image !== 'string' || !image.startsWith('data:')) {
+      return res.status(400).json({ message: 'No file provided' });
+    }
+
+    // Validate file type by extension and mime type
+    const allowedExt = ['pdf', 'dwg', 'dxf', 'ifc', 'png', 'jpg', 'jpeg', 'zip'];
+    const ext = String(filename || '').split('.').pop().toLowerCase();
+    const mime = image.substring(5, image.indexOf(';')).toLowerCase();
+    const allowedMime = [
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/octet-stream', // dwg/dxf/ifc are often sent as octet-stream
+    ];
+    if (!allowedExt.includes(ext) && !allowedMime.includes(mime)) {
+      return res.status(400).json({ message: 'File type not allowed. Allowed: PDF, DWG, DXF, IFC, PNG, JPG, ZIP' });
+    }
+
+    // ~7MB real-file cap (base64 inflates size by ~33%, body limit is 25mb)
+    if (image.length > 12 * 1024 * 1024) {
+      return res.status(400).json({ message: 'File too large. Max 7MB per file.' });
+    }
+
+    const cloudinary = require('./config/cloudinary');
+    const safeName = String(filename || 'drawing').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const result = await cloudinary.uploader.upload(image, {
+      folder: 'quote-drawings',
+      resource_type: 'auto', // required so PDFs/ZIPs (non-images) are accepted
+      public_id: `${Date.now()}-${safeName}`,
+    });
+
+    res.json({ url: result.secure_url });
+  } catch (error) {
+    console.error('Quote upload failed:', error.message);
+    res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
