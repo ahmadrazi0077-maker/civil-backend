@@ -24,6 +24,23 @@ const inquirySchema = new mongoose.Schema({
     type: String,
     required: [true, 'Message is required'],
   },
+  // NEW: File attachments
+  attachments: [{
+    name: String,
+    url: String,
+    publicId: String,
+    size: Number,
+    type: String,
+  }],
+  // Quote specific fields
+  timeline: {
+    type: String,
+    default: 'standard',
+  },
+  isQuote: {
+    type: Boolean,
+    default: false,
+  },
   status: {
     type: String,
     enum: ['new', 'read', 'replied', 'archived'],
@@ -33,22 +50,10 @@ const inquirySchema = new mongoose.Schema({
     type: String,
     default: '',
   },
-  notes: {
-    type: String,
-    default: '',
-  },
-  repliedAt: {
-    type: Date,
-  },
-  readAt: {
-    type: Date,
-  },
-  ipAddress: {
-    type: String,
-  },
-  userAgent: {
-    type: String,
-  },
+  repliedAt: Date,
+  readAt: Date,
+  ipAddress: String,
+  userAgent: String,
 }, {
   timestamps: true,
 });

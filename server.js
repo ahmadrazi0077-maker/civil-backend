@@ -437,12 +437,17 @@ app.get('/api/inquiries', async (req, res) => {
 });
 
 // Create inquiry (Public)
+// Create inquiry with attachments
 app.post('/api/inquiries', async (req, res) => {
   try {
     console.log('Creating inquiry:', req.body);
     
-    const { name, email, phone, service, message } = req.body;
+    const { 
+      name, email, phone, service, message, 
+      attachments, timeline, isQuote 
+    } = req.body;
     
+    // Validate required fields
     if (!name || !email || !service || !message) {
       return res.status(400).json({ 
         message: 'Missing required fields',
@@ -456,12 +461,16 @@ app.post('/api/inquiries', async (req, res) => {
       phone: phone || '',
       service,
       message,
+      attachments: attachments || [],
+      timeline: timeline || 'standard',
+      isQuote: isQuote || false,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       status: 'new',
     });
     
-    console.log('✅ Inquiry created:', inquiry.name);
+    console.log('✅ Inquiry created:', inquiry._id, 'with', attachments?.length || 0, 'attachments');
+    
     res.status(201).json({
       success: true,
       message: 'Inquiry submitted successfully',
@@ -469,7 +478,7 @@ app.post('/api/inquiries', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating inquiry:', error);
-    res.status(500).json({ message: 'Error submitting inquiry' });
+    res.status(500).json({ message: error.message || 'Error submitting inquiry' });
   }
 });
 
