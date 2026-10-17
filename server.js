@@ -9,7 +9,7 @@ const BlogPost = require('./models/BlogPost');
 const Inquiry = require('./models/Inquiry');
 const Project = require('./models/Project');
 const Subscriber = require('./models/Subscriber');
-const Admin = require('./models/Admin'); // Agar admin model hai toh
+
 
 dotenv.config();
 
@@ -39,28 +39,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 app.use('/api/upload', uploadRoutes);
 
 // Auth Route
-const authRoutes = require('./routes/authRoutes');
-app.use('/api/auth', authRoutes);
 
-// Service Routes
-const serviceRoutes = require('./routes/serviceRoutes');
-app.use('/api/services', serviceRoutes);
-
-// Inquiry Routes (Contact & Quote)
-const inquiryRoutes = require('./routes/inquiryRoutes');
-app.use('/api/inquiries', inquiryRoutes);
-
-// Blog Routes
-const blogRoutes = require('./routes/blogRoutes');
-app.use('/api/blog', blogRoutes);
-
-// Project Routes
-const projectRoutes = require('./routes/projectRoutes');
-app.use('/api/projects', projectRoutes);
-
-// Subscriber Routes
-const subscriberRoutes = require('./routes/subscriberRoutes');
-app.use('/api/subscribers', subscriberRoutes);
 
 
 // Root route (Health Check)
