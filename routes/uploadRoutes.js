@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const cloudinary = require('../config/cloudinary');
 
-// @route   POST /api/upload
-// @desc    Upload file to Cloudinary
-// @access  Public
 router.post('/', async (req, res) => {
   try {
     const { file, folder = 'civil-services', fileName } = req.body;
@@ -13,17 +10,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'No file provided' });
     }
 
-    const uploadOptions = {
+    const result = await cloudinary.uploader.upload(file, {
       folder: folder,
-      resource_type: 'auto', // Support PDF, DWG, images
-      public_id: fileName 
-        ? `${Date.now()}-${fileName.replace(/\.[^/.]+$/, '')}` 
-        : undefined,
-      use_filename: true,
-      unique_filename: true,
-    };
-
-    const result = await cloudinary.uploader.upload(file, uploadOptions);
+      resource_type: 'auto',
+      public_id: fileName ? `${Date.now()}-${fileName.split('.')[0]}` : undefined,
+    });
 
     res.json({
       success: true,
@@ -34,12 +25,8 @@ router.post('/', async (req, res) => {
       type: result.format,
     });
   } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Upload failed', 
-      error: error.message 
-    });
+    console.error('Cloudinary Upload Error:', error); // Ye check karo backend terminal me
+    res.status(500).json({ message: error.message });
   }
 });
 
