@@ -2,23 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+// ... baaki imports
+const uploadRoutes = require('./routes/uploadRoutes'); // Make sure file exist karti ho
+
+
 
 // Models
 const Service = require('./models/Service');
 const BlogPost = require('./models/BlogPost');
 const Inquiry = require('./models/Inquiry');
 const Project = require('./models/Project');
-const Subscriber = require('./models/Subscriber');
-
 
 dotenv.config();
 
-// Connect to MongoDB
-connectDB(); 
-
 const app = express();
 
-// CORS - Allow all
+// CORS
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -26,39 +25,23 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parser - 50mb limit for file uploads
+// Body parser
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// ... app setup
 
-// ==========================================
-// ROUTES MOUNTING (Sab routes yahan aayenge)
-// ==========================================
+// Routes mount karo
 
-// Upload Route
-const uploadRoutes = require('./routes/uploadRoutes');
-app.use('/api/upload', uploadRoutes);
+app.use('/api/upload', uploadRoutes); // ✅ Ye line zaroori hai
+// Connect to MongoDB
+connectDB(); 
 
-// Auth Route
-
-
-
-// Root route (Health Check)
+// Root route
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Civil Services API is running',
     database: 'Connected',
   });
-});
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ message: `Route not found: ${req.originalUrl}` });
-});
-
-// Error Handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
 // ============ AUTH ROUTES ============
