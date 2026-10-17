@@ -31,7 +31,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ... app setup
 
 // Routes mount karo
-app.use('/api/auth', require('./routes/authRoutes')); // Example
+
 app.use('/api/upload', uploadRoutes); // ✅ Ye line zaroori hai
 // Connect to MongoDB
 connectDB(); 

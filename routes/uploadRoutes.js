@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const cloudinary = require('../config/cloudinary');
 
+// POST request handle karega
 router.post('/', async (req, res) => {
   try {
     const { file, folder = 'civil-services', fileName } = req.body;
@@ -13,7 +14,6 @@ router.post('/', async (req, res) => {
     const result = await cloudinary.uploader.upload(file, {
       folder: folder,
       resource_type: 'auto',
-      public_id: fileName ? `${Date.now()}-${fileName.split('.')[0]}` : undefined,
     });
 
     res.json({
@@ -21,12 +21,10 @@ router.post('/', async (req, res) => {
       url: result.secure_url,
       publicId: result.public_id,
       name: fileName || result.original_filename,
-      size: result.bytes,
-      type: result.format,
     });
   } catch (error) {
-    console.error('Cloudinary Upload Error:', error); // Ye check karo backend terminal me
-    res.status(500).json({ message: error.message });
+    console.error('Cloudinary Error:', error);
+    res.status(500).json({ message: 'Upload failed', error: error.message });
   }
 });
 
