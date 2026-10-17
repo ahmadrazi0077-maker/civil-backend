@@ -2,10 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-// ... baaki imports
-const uploadRoutes = require('./routes/uploadRoutes'); // Make sure file exist karti ho
+const { protect, signAdminToken } = require('./middleware/auth');
 
-
+// Admin credentials — set ADMIN_USERNAME / ADMIN_PASSWORD in env vars (Render dashboard).
+// Falls back to the previous hardcoded defaults if not set.
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 // Models
 const Service = require('./models/Service');
@@ -26,13 +28,9 @@ app.use(cors({
 }));
 
 // Body parser
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// ... app setup
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Routes mount karo
-
-app.use('/api/upload', uploadRoutes); // ✅ Ye line zaroori hai
 // Connect to MongoDB
 connectDB(); 
 
@@ -50,13 +48,14 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     
     // Hardcoded demo login
-    if (username === 'admin' && password === 'admin123') {
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      const token = signAdminToken(ADMIN_USERNAME);
       return res.json({
         _id: 'admin-1',
-        username: 'admin',
-        email: 'admin@civilpro.com',
+        username: ADMIN_USERNAME,
+        email: process.env.ADMIN_EMAIL || 'admin@civilpro.com',
         role: 'admin',
-        token: 'demo-token-' + Date.now(),
+        token,
       });
     }
     
@@ -67,7 +66,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/auth/profile', (req, res) => {
+app.get('/api/auth/profile', protect,(req, res) => {
   res.json({
     _id: 'admin-1',
     username: 'admin',
@@ -91,7 +90,7 @@ app.get('/api/services', async (req, res) => {
 });
 
 // Get all services (admin - includes inactive)
-app.get('/api/services/all', async (req, res) => {
+app.get('/api/services/all', protect,async (req, res) => {
   try {
     console.log('Fetching all services for admin');
     const services = await Service.find().sort('order');
@@ -137,7 +136,7 @@ app.get('/api/services/id/:id', async (req, res) => {
 });
 
 // Create service
-app.post('/api/services', async (req, res) => {
+app.post('/api/services', protect,async (req, res) => {
   try {
     console.log('Creating service:', req.body);
     
@@ -178,7 +177,7 @@ app.post('/api/services', async (req, res) => {
 });
 
 // Update service by ID
-app.put('/api/services/:id', async (req, res) => {
+app.put('/api/services/:id', protect,async (req, res) => {
   try {
     console.log('Updating service:', req.params.id);
     console.log('Update data:', req.body);
@@ -220,7 +219,7 @@ app.put('/api/services/:id', async (req, res) => {
 });
 
 // Delete service
-app.delete('/api/services/:id', async (req, res) => {
+app.delete('/api/services/:id', protect,async (req, res) => {
   try {
     console.log('Deleting service:', req.params.id);
     
@@ -259,7 +258,7 @@ app.get('/api/blog', async (req, res) => {
 });
 
 // Get all blog posts (including unpublished for admin)
-app.get('/api/blog/all', async (req, res) => {
+app.get('/api/blog/all', protect,async (req, res) => {
   try {
     const posts = await BlogPost.find().sort({ createdAt: -1 });
     res.json({ posts, total: posts.length });
@@ -292,7 +291,7 @@ app.get('/api/blog/:slug', async (req, res) => {
 });
 
 // Create blog post
-app.post('/api/blog', async (req, res) => {
+app.post('/api/blog', protect,async (req, res) => {
   try {
     console.log('Creating blog post:', req.body);
     
@@ -335,7 +334,7 @@ app.post('/api/blog', async (req, res) => {
 });
 
 // Update blog post
-app.put('/api/blog/:id', async (req, res) => {
+app.put('/api/blog/:id', protect,async (req, res) => {
   try {
     console.log('Updating blog post:', req.params.id);
     
@@ -371,7 +370,7 @@ app.put('/api/blog/:id', async (req, res) => {
 });
 
 // Delete blog post
-app.delete('/api/blog/:id', async (req, res) => {
+app.delete('/api/blog/:id', protect,async (req, res) => {
   try {
     console.log('Deleting blog post:', req.params.id);
     
@@ -396,7 +395,7 @@ app.delete('/api/blog/:id', async (req, res) => {
 
 // IMPORTANT: Stats route pehle rakho (specific routes pehle)
 // Get inquiry statistics (Admin)
-app.get('/api/inquiries/stats', async (req, res) => {
+app.get('/api/inquiries/stats', protect,async (req, res) => {
   try {
     console.log('Fetching inquiry stats');
     
@@ -422,7 +421,7 @@ app.get('/api/inquiries/stats', async (req, res) => {
 });
 
 // Get all inquiries (Admin)
-app.get('/api/inquiries', async (req, res) => {
+app.get('/api/inquiries', protect,async (req, res) => {
   try {
     console.log('Fetching all inquiries');
     
@@ -445,17 +444,12 @@ app.get('/api/inquiries', async (req, res) => {
 });
 
 // Create inquiry (Public)
-// Create inquiry with attachments
 app.post('/api/inquiries', async (req, res) => {
   try {
     console.log('Creating inquiry:', req.body);
     
-    const { 
-      name, email, phone, service, message, 
-      attachments, timeline, isQuote 
-    } = req.body;
+    const { name, email, phone, service, message } = req.body;
     
-    // Validate required fields
     if (!name || !email || !service || !message) {
       return res.status(400).json({ 
         message: 'Missing required fields',
@@ -469,16 +463,12 @@ app.post('/api/inquiries', async (req, res) => {
       phone: phone || '',
       service,
       message,
-      attachments: attachments || [],
-      timeline: timeline || 'standard',
-      isQuote: isQuote || false,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       status: 'new',
     });
     
-    console.log('✅ Inquiry created:', inquiry._id, 'with', attachments?.length || 0, 'attachments');
-    
+    console.log('✅ Inquiry created:', inquiry.name);
     res.status(201).json({
       success: true,
       message: 'Inquiry submitted successfully',
@@ -486,12 +476,12 @@ app.post('/api/inquiries', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating inquiry:', error);
-    res.status(500).json({ message: error.message || 'Error submitting inquiry' });
+    res.status(500).json({ message: 'Error submitting inquiry' });
   }
 });
 
 // Get single inquiry by ID (Admin)
-app.get('/api/inquiries/:id', async (req, res) => {
+app.get('/api/inquiries/:id', protect,async (req, res) => {
   try {
     // Skip if id is 'stats'
     if (req.params.id === 'stats') {
@@ -514,7 +504,7 @@ app.get('/api/inquiries/:id', async (req, res) => {
 });
 
 // Update inquiry (Admin)
-app.put('/api/inquiries/:id', async (req, res) => {
+app.put('/api/inquiries/:id', protect,async (req, res) => {
   try {
     console.log('Updating inquiry:', req.params.id, req.body);
     
@@ -545,7 +535,7 @@ app.put('/api/inquiries/:id', async (req, res) => {
 });
 
 // Mark inquiry as read (Admin)
-app.patch('/api/inquiries/:id/read', async (req, res) => {
+app.patch('/api/inquiries/:id/read', protect,async (req, res) => {
   try {
     const inquiry = await Inquiry.findById(req.params.id);
     
@@ -565,7 +555,7 @@ app.patch('/api/inquiries/:id/read', async (req, res) => {
 });
 
 // Delete inquiry (Admin)
-app.delete('/api/inquiries/:id', async (req, res) => {
+app.delete('/api/inquiries/:id', protect,async (req, res) => {
   try {
     console.log('Deleting inquiry:', req.params.id);
     
@@ -629,7 +619,7 @@ app.get('/api/projects/:slug', async (req, res) => {
 });
 
 // Create project
-app.post('/api/projects', async (req, res) => {
+app.post('/api/projects', protect,async (req, res) => {
   try {
     console.log('Creating project:', req.body);
     
@@ -675,7 +665,7 @@ app.post('/api/projects', async (req, res) => {
 });
 
 // Update project
-app.put('/api/projects/:id', async (req, res) => {
+app.put('/api/projects/:id', protect,async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -695,7 +685,7 @@ app.put('/api/projects/:id', async (req, res) => {
 });
 
 // Delete project
-app.delete('/api/projects/:id', async (req, res) => {
+app.delete('/api/projects/:id', protect,async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -768,7 +758,7 @@ app.post('/api/subscribers', async (req, res) => {
 });
 
 // Get all subscribers (Admin)
-app.get('/api/subscribers', async (req, res) => {
+app.get('/api/subscribers', protect,async (req, res) => {
   try {
     console.log('Fetching subscribers');
     
@@ -805,7 +795,7 @@ app.get('/api/subscribers', async (req, res) => {
 });
 
 // Unsubscribe from newsletter (Public)
-app.delete('/api/subscribers/:email', async (req, res) => {
+app.delete('/api/subscribers/:email', protect,async (req, res) => {
   try {
     const email = req.params.email.toLowerCase();
     
@@ -827,7 +817,7 @@ app.delete('/api/subscribers/:email', async (req, res) => {
 });
 
 // Delete subscriber (Admin)
-app.delete('/api/subscribers/:id', async (req, res) => {
+app.delete('/api/subscribers/:id', protect,async (req, res) => {
   try {
     console.log('Deleting subscriber:', req.params.id);
     
@@ -847,7 +837,7 @@ app.delete('/api/subscribers/:id', async (req, res) => {
 });
 
 // Get subscriber stats (Admin)
-app.get('/api/subscribers/stats', async (req, res) => {
+app.get('/api/subscribers/stats', protect,async (req, res) => {
   try {
     const total = await Subscriber.countDocuments();
     const active = await Subscriber.countDocuments({ status: 'active' });
@@ -866,7 +856,7 @@ app.get('/api/subscribers/stats', async (req, res) => {
 
 
 // Toggle featured status
-app.patch('/api/projects/:id/featured', async (req, res) => {
+app.patch('/api/projects/:id/featured', protect,async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -930,7 +920,7 @@ app.get('/api/reviews', async (req, res) => {
 });
 
 // Get all reviews (Admin)
-app.get('/api/reviews/all', async (req, res) => {
+app.get('/api/reviews/all', protect,async (req, res) => {
   try {
     const reviews = await Review.find().sort({ createdAt: -1 });
     res.json({ reviews, total: reviews.length });
@@ -940,7 +930,7 @@ app.get('/api/reviews/all', async (req, res) => {
 });
 
 // Get review stats
-app.get('/api/reviews/stats', async (req, res) => {
+app.get('/api/reviews/stats', protect,async (req, res) => {
   try {
     const total = await Review.countDocuments({ isApproved: true });
     const average = await Review.aggregate([
@@ -997,7 +987,7 @@ app.post('/api/reviews', async (req, res) => {
 });
 
 // Approve review (Admin)
-app.patch('/api/reviews/:id/approve', async (req, res) => {
+app.patch('/api/reviews/:id/approve', protect,async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: 'Review not found' });
@@ -1011,7 +1001,7 @@ app.patch('/api/reviews/:id/approve', async (req, res) => {
 });
 
 // Feature review (Admin)
-app.patch('/api/reviews/:id/feature', async (req, res) => {
+app.patch('/api/reviews/:id/feature', protect,async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: 'Review not found' });
@@ -1025,7 +1015,7 @@ app.patch('/api/reviews/:id/feature', async (req, res) => {
 });
 
 // Respond to review (Admin)
-app.post('/api/reviews/:id/respond', async (req, res) => {
+app.post('/api/reviews/:id/respond', protect,async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: 'Review not found' });
@@ -1056,7 +1046,7 @@ app.patch('/api/reviews/:id/helpful', async (req, res) => {
 });
 
 // Delete review (Admin)
-app.delete('/api/reviews/:id', async (req, res) => {
+app.delete('/api/reviews/:id', protect,async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: 'Review not found' });
