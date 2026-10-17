@@ -2,22 +2,23 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-// ... baaki imports
-const uploadRoutes = require('./routes/uploadRoutes'); // Make sure file exist karti ho
-
-
 
 // Models
 const Service = require('./models/Service');
 const BlogPost = require('./models/BlogPost');
 const Inquiry = require('./models/Inquiry');
 const Project = require('./models/Project');
+const Subscriber = require('./models/Subscriber');
+const Admin = require('./models/Admin'); // Agar admin model hai toh
 
 dotenv.config();
 
+// Connect to MongoDB
+connectDB(); 
+
 const app = express();
 
-// CORS
+// CORS - Allow all
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -25,23 +26,60 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parser
+// Body parser - 50mb limit for file uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// ... app setup
 
-// Routes mount karo
+// ==========================================
+// ROUTES MOUNTING (Sab routes yahan aayenge)
+// ==========================================
 
-app.use('/api/upload', uploadRoutes); // ✅ Ye line zaroori hai
-// Connect to MongoDB
-connectDB(); 
+// Upload Route
+const uploadRoutes = require('./routes/uploadRoutes');
+app.use('/api/upload', uploadRoutes);
 
-// Root route
+// Auth Route
+const authRoutes = require('./routes/authRoutes');
+app.use('/api/auth', authRoutes);
+
+// Service Routes
+const serviceRoutes = require('./routes/serviceRoutes');
+app.use('/api/services', serviceRoutes);
+
+// Inquiry Routes (Contact & Quote)
+const inquiryRoutes = require('./routes/inquiryRoutes');
+app.use('/api/inquiries', inquiryRoutes);
+
+// Blog Routes
+const blogRoutes = require('./routes/blogRoutes');
+app.use('/api/blog', blogRoutes);
+
+// Project Routes
+const projectRoutes = require('./routes/projectRoutes');
+app.use('/api/projects', projectRoutes);
+
+// Subscriber Routes
+const subscriberRoutes = require('./routes/subscriberRoutes');
+app.use('/api/subscribers', subscriberRoutes);
+
+
+// Root route (Health Check)
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Civil Services API is running',
     database: 'Connected',
   });
+});
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({ message: `Route not found: ${req.originalUrl}` });
+});
+
+// Error Handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
 // ============ AUTH ROUTES ============
