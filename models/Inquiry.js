@@ -26,11 +26,12 @@ const inquirySchema = new mongoose.Schema({
   },
   // NEW: File attachments
   attachments: [{
-    name: String,
-    url: String,
-    publicId: String,
-    size: Number,
-    type: String,
+    name: { type: String },
+    url: { type: String },
+    publicId: { type: String },
+    size: { type: Number },
+    type: { type: String },
+    uploadFailed: { type: Boolean } // Fallback ke liye
   }],
   // Quote specific fields
   timeline: {
