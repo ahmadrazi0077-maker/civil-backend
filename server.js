@@ -19,11 +19,13 @@ dotenv.config();
 
 const app = express();
 
-// ---------- Email notifications (Zoho SMTP) ----------
+// ---------- Email notifications ----------
 // Sends a notification to NOTIFY_EMAIL whenever a new inquiry, subscriber
-// or review arrives. Configured purely via env vars (SMTP_HOST, SMTP_PORT,
-// SMTP_USER, SMTP_PASS, NOTIFY_EMAIL). If they are missing, notifications
-// are silently skipped and the forms keep working exactly as before.
+// or review arrives. Preferred transport is the Resend HTTPS API
+// (RESEND_API_KEY) because Render's free tier blocks outbound SMTP ports.
+// Falls back to SMTP (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) when no
+// Resend key is set. If neither is configured, notifications are silently
+// skipped and the forms keep working exactly as before.
 const nodemailer = require('nodemailer');
 let _mailer = null;
 function getMailer() {
@@ -43,23 +45,50 @@ function escHtml(v) {
   return String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+async function sendViaResend({ to, subject, html, text, replyTo }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `Precon Detailing Website <${process.env.NOTIFY_FROM || 'info@precondetailing.com'}>`,
+      to: [to],
+      subject,
+      html,
+      text,
+      reply_to: replyTo || undefined,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend API ${res.status}: ${body.slice(0, 200)}`);
+  }
+}
 function notifyByEmail(subject, rows, replyTo) {
   try {
-    const mailer = getMailer();
-    if (!mailer) return;
+    const useResend = !!process.env.RESEND_API_KEY;
+    const mailer = useResend ? null : getMailer();
+    if (!useResend && !mailer) return;
     const to = process.env.NOTIFY_EMAIL || 'info@precondetailing.com';
     const htmlRows = rows.map(([k, v]) =>
       `<tr><td style="padding:6px 10px;font-weight:bold;background:#f3f6f9;border:1px solid #e2e8f0;white-space:nowrap">${escHtml(k)}</td><td style="padding:6px 10px;border:1px solid #e2e8f0">${escHtml(v)}</td></tr>`
     ).join('');
     const text = rows.map(([k, v]) => `${k}: ${v}`).join('\n');
-    mailer.sendMail({
-      from: `"Precon Detailing Website" <${process.env.SMTP_USER}>`,
-      to,
-      replyTo: replyTo || undefined,
-      subject,
-      text: `${subject}\n\n${text}\n\nView full details in the admin panel: https://precondetailing.com/admin/login`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:620px"><h2 style="color:#10243A;font-size:18px">${escHtml(subject)}</h2><table style="border-collapse:collapse;width:100%">${htmlRows}</table><p style="color:#64748B;font-size:13px">View full details in the admin panel: https://precondetailing.com/admin/login</p></div>`,
-    }).then(() => console.log('Notification email sent:', subject))
+    const fullText = `${subject}\n\n${text}\n\nView full details in the admin panel: https://precondetailing.com/admin/login`;
+    const fullHtml = `<div style="font-family:Arial,sans-serif;max-width:620px"><h2 style="color:#10243A;font-size:18px">${escHtml(subject)}</h2><table style="border-collapse:collapse;width:100%">${htmlRows}</table><p style="color:#64748B;font-size:13px">View full details in the admin panel: https://precondetailing.com/admin/login</p></div>`;
+    const sendPromise = useResend
+      ? sendViaResend({ to, subject, html: fullHtml, text: fullText, replyTo })
+      : mailer.sendMail({
+          from: `"Precon Detailing Website" <${process.env.SMTP_USER}>`,
+          to,
+          replyTo: replyTo || undefined,
+          subject,
+          text: fullText,
+          html: fullHtml,
+        });
+    sendPromise.then(() => console.log('Notification email sent:', subject))
       .catch((e) => console.error('Notification email failed:', e.message));
   } catch (e) {
     console.error('Notification email failed:', e.message);
